@@ -1,9 +1,9 @@
 from setuptools import setup, find_packages
 import os
 
-version = open(os.path.join("akorn", "admin", "version.txt")).read().strip()
+version = open(os.path.join("akorn_admin", "version.txt")).read().strip()
 
-setup(name='akorn.admin',
+setup(name='akorn_admin',
       version=version,
       description="",
       classifiers=[
@@ -16,7 +16,7 @@ setup(name='akorn.admin',
       url='',
       license='',
       packages=find_packages(exclude=['ez_setup']),
-      namespace_packages=['akorn'],
+      namespace_packages=['akorn_admin'],
       include_package_data=True,
       zip_safe=False,
       install_requires=[

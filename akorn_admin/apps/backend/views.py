@@ -1,7 +1,7 @@
 # Create your views here.
 from django.shortcuts import render_to_response
 from django.template import RequestContext
-from akorn.admin.couch import db_store, db_journals
+from couch import db_store, db_journals
 #from akorn.celery.scrapers import tasks
 
 def backend_journals(request):
