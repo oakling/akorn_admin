@@ -2,7 +2,7 @@
 from django.shortcuts import render_to_response
 from django.template import RequestContext
 from couch import db_store, db_journals
-#from akorn.celery.scrapers import tasks
+from akorn.celery.scrapers import tasks
 
 def backend_journals(request):
   db_docs = db_store
@@ -41,104 +41,69 @@ def backend_journal(request, journal_id):
                                                      'scraper_modules': list(scraper_modules),},
                             context_instance=RequestContext(request))
 
-
 def backend_scrapers(request):
-    scrapers = {}
+  scraper_details = {}
+  
+  for row in db_store.view('rescrape/scraper_exception_errors').rows:
+    module, error = row['key']
+    error = error.split(":")[0]
+    scraper_details.setdefault(module, 
+                               { 'name': module.split('.')[-1],
+                                 'module': module,
+                                 'num_docs': 0,
+                                 'errors': {}})
+    scraper_details[module]['errors'].setdefault(error, {'num_rescrape': 0, 'ids':[]})
+    scraper_details[module]['errors'][error]['num_rescrape'] += 1
+    scraper_details[module]['errors'][error]['ids'].append(row['id'])
+    
+  for row in db_store.view('rescrape/scraper_total_docs', group=True):
+    module = row['key']
+    if module in scraper_details:
+      scraper_details[module]['num_docs'] = row['value']
 
-    scrapers['Unable to resolve'] = {'name': 'Scraper Unresolved', 
-                                     'module': None, 
-                                     'num_docs': 0,
-                                     'error_type_count': 0,
-                                     'errors': []}
-    scrapers['Scraper Module Missing'] = {'name': 'Scraper Module Missing', 
-                                          'module': None, 
-                                          'num_docs': 0,
-                                          'error_type_count': 0,
-                                          'errors': []}
+  scrapers = []
+  for key, details in scraper_details.items():
+    errors = []
+    for exception, error_details in details['errors'].items():
+      errors.append({'exception':exception, 
+                     'num_rescrape':error_details['num_rescrape'], 
+                       'ids':u",".join(error_details['ids']),})
+      
+    scrapers.append({'name':details['name'],
+                     'module':details['module'],
+                     'num_docs':details['num_docs'],
+                     'error_type_count':len(details['errors']),
+                     'errors': errors})
 
-    for row in db_store.view('rescrape/scraper_exception_error_count', group=True).rows:
-        module, error = row['key']
-        scrapers.setdefault(module, 
-                            { 'name': module.split('.')[-1],
-                              'module': module,
-                              'num_docs': 0,
-                              'error_type_count': 0,
-                              'errors': []})
-        scrapers[module]['error_type_count'] += 1
-        scrapers[module]['errors'].append({ 'exception': error,
-                                       'num_rescrape': row['value'] })
+  return render_to_response( 'backend/scrapers.html', 
+                             {'scrapers': scrapers,}, 
+                             context_instance=RequestContext(request) )
 
-    for row in db_store.view('rescrape/scraper_total_docs', group=True):
-        module = row['key']
-        if module in scrapers:
-            scrapers[module]['num_docs'] = row['value']
-
-    scrapers = scrapers.values()
-
-    return render_to_response( 'backend/scrapers.html', 
-                               {'scrapers': scrapers,}, 
-                               context_instance=RequestContext(request) )
-
-def backend_scraper_detail(request, scraper_module):
-    exceptions = {}
-    for row in db_store.view('rescrape/rescrape', key=scraper_module, include_docs=True).rows:
-        doc = row.doc
-        exceptions.setdefault(doc['exception'], 
-                          {'exception': doc['exception'],
-                           'num_errors': 0,
-                           'errors': [],})
-        exceptions[doc['exception']]['num_errors'] += 1
-        exceptions[doc['exception']]['errors'].append(
-            { 'error_text': doc['error_text'],
-              'source_urls': doc['source_urls'], 
-              'doc_id': doc.id})
-
-    exceptions = exceptions.values()
-
-    return render_to_response( 'backend/scraper_detail.html',
-                               {'scraper_module': scraper_module,
-                                'exceptions': exceptions,
-                               },
-                               context_instance=RequestContext(request) )
-
-# Yuck... mixing view and behaviour...
-# Which module should contain rescrape_doc?  
-# Similarly, am I calling it in a sane way?
-def rescrape_doc(doc):
-    try:
-        if 'source_url' in doc:
-            print doc['source_url']
-            tasks.scrape_journal(doc['source_url'], doc.id)
-        if 'source_urls' in doc:
-            print doc['source_urls']
-            tasks.scrape_journal(doc['source_urls'][0], doc.id)
-        elif 'scraper_source' in doc:
-            print doc['scraper_source']
-            tasks.scrape_journal(doc['scraper_source'], doc.id)
-    except Exception, e:
-        print "eep! -- " + str(type(e)) + ': ' + str(e)
+def rescrape_doc(doc_id):
+  print "RESCRAPING...."
+  print "Document ID: %s"%doc_id
+  doc = db_store.get(doc_id)
+  if 'source_url' in doc:
+    print doc['source_url']
+    tasks.scrape_journal.delay(doc['source_url'], doc.id)
+  elif 'source_urls' in doc:
+    print doc['source_urls']
+    tasks.scrape_journal.delay(doc['source_urls'][0], doc.id)
+  elif 'scraper_source' in doc:
+    print doc['scraper_source']
+    tasks.scrape_journal.delay(doc['scraper_source'], doc.id)
 
 def backend_rescrape(request):
-    if request.method == "POST":
-        print request.POST
-        if request.POST['source'] == 'main':
-            print "MAIN"
-            num_to_rescrape = 0
-            for row in db_store.view(
-                'rescrape/scraper_exception_errors', 
-                key=(request.POST['scraper_module'], request.POST['exception']), 
-                include_docs=True ).rows:
-                rescrape_doc(row.doc)
-                num_to_rescrape += 1
-        elif request.POST['source'] == 'details':
-            print "DETAILS"
-            rescrape_doc(db_store[request.POST['doc_id']])
-            num_to_rescrape = 1
-
-        return render_to_response( 'backend/rescrape.html',
-                                   {'num_to_rescrape': str(num_to_rescrape)},
-                                   context_instance=RequestContext(request) )
-    else:
-        return render_to_response( 'backend/rescrape.html',
-                                   {'num_to_rescrape': "none"},
-                                   context_instance=RequestContext(request) )
+  if request.method == "POST":
+    docs_to_rescrape = [b for a in request.POST.getlist('to_rescrape') for b in a.split(',')]
+    
+    for doc in docs_to_rescrape:
+      rescrape_doc(doc)
+    
+    return render_to_response('backend/rescrape.html',
+                              {'num_to_rescrape': len(docs_to_rescrape)},
+                              context_instance=RequestContext(request));
+  else:
+    return render_to_response('backend/rescrape.html',
+                              {'num_to_rescrape': 0},
+                              context_instance=RequestContext(request));

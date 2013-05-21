@@ -44,42 +44,45 @@ $(document).ready(akorn.init);
 {% block content %}
 <div class="span9 search">
   <h2>Scraper summary</h2>
-  <table class='scrapers_table'>
-  <thead>
-  <tr>
-    <th>Name</th><th>Module</th><th>Total docs</th><th>Error</th><th>Num to rescrape</th><th/>
-  </tr>
-  </thead>
-  {% for scraper in scrapers %}
-  {% for error in scraper.errors %}
-    <tr class="table-row">
-      {% if forloop.counter0 == 0%}
-      <td rowspan="{{scraper.error_type_count}}">
-        <a href="scraper_detail/{{scraper.module}}">
-        {{scraper.name}}
-        </a>
-      </td>
-      <td rowspan="{{scraper.error_type_count}}">
-        {{scraper.module}}
-      </td>
-      <td rowspan="{{scraper.error_type_count}}">
-        {{scraper.num_docs}}
-      </td>
-      {% endif %}
-      <td>{{error.exception}}</td>
-      <td>{{error.num_rescrape}}</td>
-      <td>
-        <form method="post" action="/backend/rescrape">{% csrf_token %}
-          <input type="hidden" name="source" value="main"/>
-          <input type="hidden" name="scraper_module" value="{{scraper.module}}"/>
-          <input type="hidden" name="exception" value="{{error.exception}}"/>
-          <button>rescrape</button>
-        </form>
-      </td>
-    </tr>
-    {% endfor %}
-  {% endfor %}
-  </table>
+  <form method="post" action="/backend/rescrape">{% csrf_token %}
+    <button>rescrape</button>
+    <table class='scrapers_table'>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Module</th>
+          <th>Total docs</th>
+          <th>Error</th>
+          <th>Num to rescrape</th>
+          <th></th>
+        </tr>
+      </thead>
+      {% for scraper in scrapers %}
+      {% for error in scraper.errors %}
+      <tr class="table-row">
+        {% if forloop.counter0 == 0%}
+        <td rowspan="{{scraper.error_type_count}}">
+          <a href="scraper_detail/{{scraper.module}}">
+            {{scraper.name}}
+          </a>
+        </td>
+        <td rowspan="{{scraper.error_type_count}}">
+          {{scraper.module}}
+        </td>
+        <td rowspan="{{scraper.error_type_count}}">
+          {{scraper.num_docs}}
+        </td>
+        {% endif %}
+        <td>{{error.exception}}</td>
+        <td>{{error.num_rescrape}}</td>
+        <td>
+          <input type='checkbox' name='to_rescrape' value='{{error.ids}}'/>
+        </td>
+      </tr>
+      {% endfor %}
+      {% endfor %}
+    </table>
+  </form>
 </div>
 
 <div class="span3">
