@@ -41,7 +41,33 @@ def backend_journal(request, journal_id):
                                                      'scraper_modules': list(scraper_modules),},
                             context_instance=RequestContext(request))
 
+def rescrape_doc(doc_id):
+  doc = db_store[doc_id]
+
+  doc['currently_rescraping'] = True
+  db_store.save(doc)
+
+  if 'source_url' in doc:
+    print doc['source_url']
+    tasks.scrape_journal.delay(doc['source_url'], doc.id)
+  elif 'source_urls' in doc:
+    print doc['source_urls']
+    tasks.scrape_journal.delay(doc['source_urls'][0], doc.id)
+  elif 'scraper_source' in doc:
+    print doc['scraper_source']
+    tasks.scrape_journal.delay(doc['scraper_source'], doc.id)
+
 def backend_scrapers(request):
+  if request.method == "POST":
+    docs_to_rescrape = [b for a in request.POST.getlist('to_rescrape') for b in a.split(',')]
+    
+    for doc in docs_to_rescrape:
+      rescrape_doc(doc)
+
+  in_progress = {'num': 0}
+  for row in db_store.view('rescrape/currently_rescraping', group=True).rows:
+    in_progress['num']=row['value']
+
   scraper_details = {}
   
   for row in db_store.view('rescrape/scraper_exception_errors').rows:
@@ -76,34 +102,6 @@ def backend_scrapers(request):
                      'errors': errors})
 
   return render_to_response( 'backend/scrapers.html', 
-                             {'scrapers': scrapers,}, 
+                             {'scrapers': scrapers,
+                              'in_progress': in_progress,}, 
                              context_instance=RequestContext(request) )
-
-def rescrape_doc(doc_id):
-  print "RESCRAPING...."
-  print "Document ID: %s"%doc_id
-  doc = db_store.get(doc_id)
-  if 'source_url' in doc:
-    print doc['source_url']
-    tasks.scrape_journal.delay(doc['source_url'], doc.id)
-  elif 'source_urls' in doc:
-    print doc['source_urls']
-    tasks.scrape_journal.delay(doc['source_urls'][0], doc.id)
-  elif 'scraper_source' in doc:
-    print doc['scraper_source']
-    tasks.scrape_journal.delay(doc['scraper_source'], doc.id)
-
-def backend_rescrape(request):
-  if request.method == "POST":
-    docs_to_rescrape = [b for a in request.POST.getlist('to_rescrape') for b in a.split(',')]
-    
-    for doc in docs_to_rescrape:
-      rescrape_doc(doc)
-    
-    return render_to_response('backend/rescrape.html',
-                              {'num_to_rescrape': len(docs_to_rescrape)},
-                              context_instance=RequestContext(request));
-  else:
-    return render_to_response('backend/rescrape.html',
-                              {'num_to_rescrape': 0},
-                              context_instance=RequestContext(request));

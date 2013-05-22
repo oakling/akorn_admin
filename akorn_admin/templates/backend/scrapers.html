@@ -44,7 +44,10 @@ $(document).ready(akorn.init);
 {% block content %}
 <div class="span9 search">
   <h2>Scraper summary</h2>
-  <form method="post" action="/backend/rescrape">{% csrf_token %}
+  <div>
+    Currently rescraping: {{ in_progress.num }}.  <a href="/backend/scrapers">refresh</a>
+  </div>
+  <form method="post" action="/backend/scrapers">{% csrf_token %}
     <button>rescrape</button>
     <table class='scrapers_table'>
       <thead>
@@ -62,9 +65,7 @@ $(document).ready(akorn.init);
       <tr class="table-row">
         {% if forloop.counter0 == 0%}
         <td rowspan="{{scraper.error_type_count}}">
-          <a href="scraper_detail/{{scraper.module}}">
-            {{scraper.name}}
-          </a>
+          {{scraper.name}}
         </td>
         <td rowspan="{{scraper.error_type_count}}">
           {{scraper.module}}
