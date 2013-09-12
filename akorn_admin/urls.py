@@ -17,4 +17,9 @@ urlpatterns = patterns('',
     url(r'^admin/', include(admin.site.urls)),
     
     url(r'', include('apps.backend.urls', namespace='backend')),
+
+	url(r'^'+settings.STATIC_URL[1:]+'(?P<path>.*)$',
+            'django.views.static.serve',
+            {'document_root': settings.STATIC_ROOT}),
 )
+
