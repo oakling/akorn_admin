@@ -11,4 +11,5 @@ install:
 #before_script:
 #  - cd buildout
 script:
+  - cd buildout
 #  - bin/django test search
