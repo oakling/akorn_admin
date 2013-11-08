@@ -1,2 +1,5 @@
 *.pyc
 local_settings.py
+
+# Exclude the egg info folder, as this is dynamically generated
+akorn_admin.egg-info
